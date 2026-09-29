@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>藏品光照轮换台</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">◷</span>
+    <div>
+      <h1>藏品光照轮换台</h1>
+      <p>博物馆展品照度预算 · 库房轮换排班（CP-SAT 求解，限时 10 秒）</p>
+    </div>
+  </div>
+  <button id="loadSampleBtn" class="btn btn-ghost" type="button">载入示例</button>
+</header>
+
+<main class="layout">
+  <!-- ============ 左：设置 ============ -->
+  <section class="panel panel-input">
+    <h2>排班设置</h2>
+
+    <div class="field">
+      <label for="slotsInput">连续一小时时段数量（1～72）</label>
+      <input id="slotsInput" type="number" min="1" max="72" step="1" />
+      <p class="hint" id="slotsHint"></p>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label>单件展位照度（1～10000 lx，最多 3 个）</label>
+        <button id="addBoothBtn" class="btn btn-mini" type="button">+ 展位</button>
+      </div>
+      <div id="boothEditor" class="booth-list"></div>
+    </div>
+
+    <div class="field">
+      <div class="field-head">
+        <label>藏品（最多 8 件）</label>
+        <button id="addItemBtn" class="btn btn-mini" type="button">+ 藏品</button>
+      </div>
+      <div class="table-wrap">
+        <table class="grid" id="itemTable">
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>剩余预算<br/>(lx·h, 0～720000)</th>
+              <th>优先级<br/>(1～10)</th>
+              <th>最低展出<br/>(0～72 h)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>锁定展位 / 库房（可选）</label>
+      <p class="hint">每件藏品每个时段至多一条锁定；跨展位移动系统会自动安排至少 1 小时库房。</p>
+      <div class="lock-form">
+        <select id="lockItem"></select>
+        <input id="lockSlot" type="number" min="1" max="72" step="1" placeholder="时段 (1起)" />
+        <select id="lockLocation"></select>
+        <button id="addLockBtn" class="btn btn-mini" type="button">锁定</button>
+      </div>
+      <ul id="lockList" class="lock-list"></ul>
+    </div>
+
+    <button id="solveBtn" class="btn btn-primary btn-block" type="button">开始求解排班</button>
+    <p class="hint center">求解顺序：先满足最低时数与锁定 → 最大化优先级加权展出小时 → 最小化出入库次数</p>
+  </section>
+
+  <!-- ============ 右：结果 ============ -->
+  <section class="panel panel-result">
+    <h2>排班结果</h2>
+
+    <div id="statusBanner" class="banner hidden"></div>
+
+    <div id="metrics" class="metrics hidden">
+      <div class="metric"><span class="metric-num" id="mWeighted">–</span><span class="metric-label">优先级加权展出小时</span></div>
+      <div class="metric"><span class="metric-num" id="mSwitches">–</span><span class="metric-label">相邻时段出入库次数</span></div>
+      <div class="metric"><span class="metric-num" id="mTime">–</span><span class="metric-label">求解耗时 (s)</span></div>
+      <div class="metric metric-save">
+        <input id="saveName" type="text" maxlength="60" placeholder="为本次排班命名后保存" />
+        <button id="saveBtn" class="btn btn-mini" type="button">保存排班</button>
+      </div>
+    </div>
+
+    <div id="timelineWrap" class="timeline-wrap hidden">
+      <h3>展位时间轴（每格 1 小时）</h3>
+      <div id="ruler" class="ruler"></div>
+      <div id="boothRows"></div>
+      <h3 class="mt">库房</h3>
+      <div id="storageRow" class="row storage-row"></div>
+      <h3 class="mt">逐件轨迹</h3>
+      <div id="itemRows"></div>
+    </div>
+
+    <div id="doseWrap" class="dose-wrap hidden">
+      <h3>逐件剂量与余额</h3>
+      <div class="table-wrap">
+        <table class="grid" id="doseTable">
+          <thead>
+            <tr>
+              <th>藏品</th><th>优先级</th><th>展出 (h)</th><th>最低 (h)</th>
+              <th>累计剂量 (lx·h)</th><th>预算 (lx·h)</th><th>余额 (lx·h)</th>
+              <th>预算用量</th><th>出入库 (次)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="emptyHint" class="empty-hint">在左侧设置时段、展位照度、藏品预算与锁定，点击「开始求解排班」。</div>
+  </section>
+</main>
+
+<section class="panel panel-saved">
+  <h2>已保存的排班 <span class="hint">（SQLite 持久化，刷新/重启后仍可查看）</span></h2>
+  <div class="table-wrap">
+    <table class="grid" id="savedTable">
+      <thead>
+        <tr><th>#</th><th>名称</th><th>状态</th><th>保存时间</th><th>操作</th></tr>
+      </thead>
+      <tbody><tr><td colspan="5" class="hint center">尚未保存排班</td></tr></tbody>
+    </table>
+  </div>
+</section>
+
+<footer class="foot">
+  FastAPI · OR-Tools CP-SAT · SQLite · 原生 JavaScript ｜ 每个时段 1 小时，库房不计光照
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
